@@ -1,0 +1,26 @@
+{
+  "name": "memory-custom",
+  "version": "1.0.0",
+  "main": "index.js",
+  "bin": {
+    "memory-custom": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "shx": "^0.3.4",
+    "typescript": "^5.8.2"
+  }
+}
