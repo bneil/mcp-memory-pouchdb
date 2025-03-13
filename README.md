@@ -60,8 +60,7 @@ System Prompt changes:
 
 ```
 Follow these steps for each interaction:
-1. Set memory_file_path as /path/to/memory/project_name.json
-
+1. The memoryFilePath for this project is /path/to/memory/project_name.json - always pass this path to the memory file operations (when creating entities, relations, or retrieving memory etc.)
 2. User Identification:
    - You should assume that you are interacting with default_user
    - If you have not identified default_user, proactively try to do so.
@@ -115,11 +114,6 @@ The server exposes several tools that can be called with specific parameters:
 - **Search Nodes**
 - **Open Nodes**
 
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - Inspired by the Memory server from Anthropic.
-- Thanks to the contributors and the open-source community for their support.
