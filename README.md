@@ -42,7 +42,7 @@ npx -y @smithery/cli install @BRO3886/mcp-memory-custom --client claude
 1. Clone the repository:
 
    ```bash
-   git clone git@github.com:BRO3886/mcp-memory-custom.git
+   git clone git@github.com:bneil/mcp-memory-custom.git
    cd mcp-memory-custom
    ```
 
