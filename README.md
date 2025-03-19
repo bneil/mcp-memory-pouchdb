@@ -1,4 +1,4 @@
-# Memory Custom 🧠
+# Memory Custom : CouchDB 🧠
 
 [![smithery badge](https://smithery.ai/badge/@BRO3886/mcp-memory-custom)](https://smithery.ai/server/@BRO3886/mcp-memory-custom)
 
