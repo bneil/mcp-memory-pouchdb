@@ -79,7 +79,7 @@ System Prompt changes:
 
 ```
 Follow these steps for each interaction:
-1. The memoryFilePath for this project is /path/to/memory/project_name.json - always pass this path to the memory file operations (when creating entities, relations, or retrieving memory etc.)
+1. The memoryFilePath for this project is /path/to/memory/project_name.json - this path is used for the backup file, while the actual data is stored in a PouchDB database named 'memory_db' in the same directory. Always pass this path to the memory file operations (when creating entities, relations, or retrieving memory etc.)
 2. User Identification:
    - You should assume that you are interacting with default_user
    - If you have not identified default_user, proactively try to do so.
