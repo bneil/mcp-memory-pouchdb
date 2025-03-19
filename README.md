@@ -1,6 +1,6 @@
 # Memory Custom : PouchDB 🧠
 
-[![smithery badge](https://smithery.ai/badge/@BRO3886/mcp-memory-custom)](https://smithery.ai/server/@BRO3886/mcp-memory-custom)
+[![smithery badge](https://smithery.ai/badge/@bneil/mcp-memory-pouchdb)](https://smithery.ai/server/@bneil/mcp-memory-pouchdb)
 
 This project adds new features to the Memory server offered by the MCP team. It allows for the creation and management of a knowledge graph that captures interactions via a language model (LLM). 🚀
 
@@ -31,10 +31,10 @@ This project adds new features to the Memory server offered by the MCP team. It 
 
 ### Installing via Smithery 📦
 
-To install Knowledge Graph Memory Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@BRO3886/mcp-memory-custom):
+To install Knowledge Graph Memory Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@bneil/mcp-memory-pouchdb):
 
 ```bash
-npx -y @smithery/cli install @BRO3886/mcp-memory-custom --client claude
+npx -y @smithery/cli install @bneil/mcp-memory-pouchdb --client claude
 ```
 
 ### Installation 🛠️
@@ -42,8 +42,8 @@ npx -y @smithery/cli install @BRO3886/mcp-memory-custom --client claude
 1. Clone the repository:
 
    ```bash
-   git clone git@github.com:bneil/mcp-memory-custom.git
-   cd mcp-memory-custom
+   git clone git@github.com:bneil/mcp-memory-pouchdb.git
+   cd mcp-memory-pouchdb
    ```
 
 2. Install the dependencies:
@@ -58,6 +58,8 @@ Before running the server, you can set the `MEMORY_FILE_PATH` environment variab
 
 The server will automatically create a PouchDB database named 'memory_db' in your project directory. 🗄️
 
+Or should, if worse comes to worse, create the directory and hopefully things work out. 
+
 ### Running the Server 🚀
 
 #### Updating the mcp server json file 📝
@@ -69,7 +71,7 @@ Add this to your `claude_desktop_config.json` / `.cursor/mcp.json` file:
   "mcpServers": {
     "memory": {
       "command": "node",
-      "args": ["/path/to/mcp-memory-custom/dist/index.js"]
+      "args": ["/path/to/mcp-memory-pouchdb/dist/index.js"]
     }
   }
 }

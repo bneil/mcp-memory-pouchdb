@@ -10,6 +10,11 @@ import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import PouchDB from 'pouchdb';
+import PouchDBMemory from 'pouchdb-adapter-memory';
+import { z } from "zod";
+
+// Register memory adapter
+PouchDB.plugin(PouchDBMemory);
 
 // Define memory file path using environment variable with fallback
 const defaultMemoryPath = path.join(
@@ -29,14 +34,38 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
 
 // Initialize PouchDB with configuration from environment variables
 const pouchDbPath = process.env.POUCHDB_PATH || 'memory_db';
-const pouchDbOptions = process.env.POUCHDB_OPTIONS 
-  ? JSON.parse(process.env.POUCHDB_OPTIONS)
-  : {
-      auto_compaction: true,
-      revs_limit: 10
-    };
+const pouchDbOptions = {
+  adapter: 'memory',
+  auto_compaction: true,
+  revs_limit: 10,
+  ...(process.env.POUCHDB_OPTIONS ? JSON.parse(process.env.POUCHDB_OPTIONS) : {})
+};
 
+console.error("Attempting to make a pouchDB instance with path", pouchDbPath, "and options", pouchDbOptions);
 const db = new PouchDB(pouchDbPath, pouchDbOptions);
+
+// Setup cleanup on process exit
+async function cleanup() {
+  try {
+    console.error("Cleaning up PouchDB...");
+    await db.close();
+    console.error("PouchDB cleanup complete");
+  } catch (error) {
+    console.error("Error during cleanup:", error);
+  }
+}
+
+process.on('exit', () => {
+  cleanup().catch(console.error);
+});
+
+process.on('SIGINT', () => {
+  cleanup().then(() => process.exit(0)).catch(() => process.exit(1));
+});
+
+process.on('SIGTERM', () => {
+  cleanup().then(() => process.exit(0)).catch(() => process.exit(1));
+});
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
@@ -80,9 +109,36 @@ class KnowledgeGraphManager {
     this.memoryFilePath = memoryFilePath;
   }
 
+  // Add retry utility
+  private async wait(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async retryOperation<T>(operation: () => Promise<T>, maxRetries = 5, initialDelay = 1000): Promise<T> {
+    let lastError;
+    let delay = initialDelay;
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        if (error.message?.includes('Resource temporarily unavailable')) {
+          console.error(`Attempt ${i + 1} failed, retrying in ${delay}ms...`);
+          await this.wait(delay);
+          // Exponential backoff with jitter
+          delay = Math.min(delay * 2, 10000) * (0.75 + Math.random() * 0.5);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  }
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
-      const result = await db.allDocs({ include_docs: true });
+      const result = await this.retryOperation(() => db.allDocs({ include_docs: true }));
       const graph: KnowledgeGraph = { entities: [], relations: [] };
       
       result.rows.forEach(row => {
@@ -103,14 +159,14 @@ class KnowledgeGraphManager {
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     try {
-      // Save to PouchDB
+      // Save to PouchDB with retry
       const docs = [
         ...graph.entities,
         ...graph.relations
       ];
-      await db.bulkDocs(docs);
+      await this.retryOperation(() => db.bulkDocs(docs));
       
-      // Backup to file (without type property since it's already in the entities/relations)
+      // Backup to file
       const lines = [
         ...graph.entities.map((e) => JSON.stringify({ ...e })),
         ...graph.relations.map((r) => JSON.stringify({ ...r })),
@@ -326,6 +382,8 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {},
+      prompts: {}
     },
   }
 );
@@ -757,6 +815,72 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
+});
+
+// Add resources/list and prompts/list handlers
+const resources = [
+  {
+    name: "memory",
+    description: "A knowledge graph memory store for maintaining context about entities and their relationships",
+    type: "memory",
+    capabilities: {
+      create: true,
+      read: true,
+      update: true,
+      delete: true,
+      search: true
+    }
+  }
+];
+
+const prompts = [
+  {
+    name: "default",
+    description: "Default prompt for interacting with the memory store",
+    text: `
+    Follow these steps for each interaction:
+1. The memoryFilePath for this project is /path/to/memory/project_name.json - this path is used for the backup file, while the actual data is stored in a PouchDB database named 'memory_db' in the same directory. Always pass this path to the memory file operations (when creating entities, relations, or retrieving memory etc.)
+2. User Identification:
+   - You should assume that you are interacting with default_user
+   - If you have not identified default_user, proactively try to do so.
+
+3. Memory Retrieval:
+   - Always begin your chat by saying only "Remembering..." and retrieve all relevant information from your knowledge graph
+   - Always refer to your knowledge graph as your "memory"
+
+4. Memory
+   - While conversing with the user, be attentive to any new information that falls into these categories:
+     a) Basic Identity (age, gender, location, job title, education level, etc.)
+     b) Behaviors (interests, habits, etc.)
+     c) Preferences (communication style, preferred language, etc.)
+     d) Goals (goals, targets, aspirations, etc.)
+     e) Relationships (personal and professional relationships up to 3 degrees of separation)
+
+5. Memory Update:
+   - If any new information was gathered during the interaction, update your memory as follows:
+     a) Create entities for recurring organizations, people, and significant events, add timestamps to wherever required. You can get current timestamp via get_current_time
+     b) Connect them to the current entities using relations
+     c) Store facts about them as observations, add timestamps to observations via get_current_time
+
+
+IMPORTANT: Provide a helpful and engaging response, asking relevant questions to encourage user engagement. Update the memory during the interaction, if required, based on the new information gathered (point 4).`
+  }
+];
+
+const ListResourcesRequestSchema = z.object({
+  method: z.literal("resources/list"),
+});
+
+const ListPromptsRequestSchema = z.object({
+  method: z.literal("prompts/list"),
+});
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return { resources };
+});
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return { prompts };
 });
 
 async function main() {

@@ -29,7 +29,7 @@ build/
 logs
 *.log
 
-# Memory files (since this is a memory-custom project)
+# Memory files (since this is a memory-pouchdb project)
 *.memory
 memory.json
 

@@ -1,9 +1,9 @@
 {
-  "name": "memory-custom",
+  "name": "memory-pouchdb",
   "version": "1.0.0",
   "main": "index.js",
   "bin": {
-    "memory-custom": "dist/index.js"
+    "memory-pouchdb": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
@@ -18,7 +18,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
     "@types/pouchdb": "^6.4.2",
-    "pouchdb": "^9.0.0"
+    "pouchdb": "^9.0.0",
+    "pouchdb-adapter-memory": "^8.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.8",
