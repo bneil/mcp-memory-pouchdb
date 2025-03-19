@@ -1,28 +1,35 @@
-# Memory Custom
+# Memory Custom 🧠
 
 [![smithery badge](https://smithery.ai/badge/@BRO3886/mcp-memory-custom)](https://smithery.ai/server/@BRO3886/mcp-memory-custom)
 
-This project adds new features to the Memory server offered by the MCP team. It allows for the creation and management of a knowledge graph that captures interactions via a language model (LLM).
+This project adds new features to the Memory server offered by the MCP team. It allows for the creation and management of a knowledge graph that captures interactions via a language model (LLM). 🚀
 
-## New Features
+## New Features ✨
 
-### 1. Custom Memory Paths
+### 1. PouchDB Integration 💾
 
-- Users can now specify different memory file paths for various projects.
-- **Why?**: This feature enhances organization and management of memory data, allowing for project-specific memory storage.
+- The server now uses PouchDB for robust document-based storage
+- **Why?**: Better data consistency, built-in versioning, and improved performance for large datasets
+- Maintains file backup for compatibility
 
-### 2. Timestamping
+### 2. Custom Memory Paths 📁
 
-- The server now generates timestamps for interactions.
-- **Why?**: Timestamps enable tracking of when each memory was created or modified, providing better context and history for the stored data.
+- Users can now specify different memory file paths for various projects
+- **Why?**: This feature enhances organization and management of memory data, allowing for project-specific memory storage
 
-## Getting Started
+### 3. Timestamping ⏰
 
-### Prerequisites
+- The server now generates timestamps for interactions
+- **Why?**: Timestamps enable tracking of when each memory was created or modified, providing better context and history for the stored data
+
+## Getting Started 🚀
+
+### Prerequisites 🔧
 
 - Node.js (version 16 or higher)
+- PouchDB (automatically installed as a dependency)
 
-### Installing via Smithery
+### Installing via Smithery 📦
 
 To install Knowledge Graph Memory Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@BRO3886/mcp-memory-custom):
 
@@ -30,7 +37,7 @@ To install Knowledge Graph Memory Server for Claude Desktop automatically via [S
 npx -y @smithery/cli install @BRO3886/mcp-memory-custom --client claude
 ```
 
-### Installation
+### Installation 🛠️
 
 1. Clone the repository:
 
@@ -45,13 +52,15 @@ npx -y @smithery/cli install @BRO3886/mcp-memory-custom --client claude
    npm install
    ```
 
-### Configuration
+### Configuration ⚙️
 
 Before running the server, you can set the `MEMORY_FILE_PATH` environment variable to specify the path for the memory file. If not set, the server will default to using `memory.json` in the same directory as the script.
 
-### Running the Server
+The server will automatically create a PouchDB database named 'memory_db' in your project directory. 🗄️
 
-#### Updating the mcp server json file
+### Running the Server 🚀
+
+#### Updating the mcp server json file 📝
 
 Add this to your `claude_desktop_config.json` / `.cursor/mcp.json` file:
 
@@ -97,7 +106,7 @@ Follow these steps for each interaction:
 IMPORTANT: Provide a helpful and engaging response, asking relevant questions to encourage user engagement. Update the memory during the interaction, if required, based on the new information gathered (point 4).
 ```
 
-#### Running the Server Locally
+#### Running the Server Locally 💻
 
 To start the Knowledge Graph Memory Server, run:
 
@@ -108,22 +117,23 @@ node dist/index.js
 
 The server will listen for requests via standard input/output.
 
-## API Endpoints
+## API Endpoints 🔌
 
 The server exposes several tools that can be called with specific parameters:
 
-- **Get Current Time**
-- **Set Memory File Path**
-- **Create Entities**
-- **Create Relations**
-- **Add Observations**
-- **Delete Entities**
-- **Delete Observations**
-- **Delete Relations**
-- **Read Graph**
-- **Search Nodes**
-- **Open Nodes**
+- **Get Current Time** ⏰
+- **Set Memory File Path** 📁
+- **Create Entities** ➕
+- **Create Relations** 🔗
+- **Add Observations** 📝
+- **Delete Entities** ❌
+- **Delete Observations** 🗑️
+- **Delete Relations** 🔗
+- **Read Graph** 📖
+- **Search Nodes** 🔍
+- **Open Nodes** 🔓
 
-## Acknowledgments
+## Acknowledgments 🙏
 
-- Inspired by the Memory server from Anthropic.
+- Inspired by the Memory server from Anthropic
+- Powered by PouchDB for robust data storage 💾

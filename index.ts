@@ -9,6 +9,7 @@ import {
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import PouchDB from 'pouchdb';
 
 // Define memory file path using environment variable with fallback
 const defaultMemoryPath = path.join(
@@ -26,17 +27,32 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
       )
   : defaultMemoryPath;
 
+// Initialize PouchDB with configuration from environment variables
+const pouchDbPath = process.env.POUCHDB_PATH || 'memory_db';
+const pouchDbOptions = process.env.POUCHDB_OPTIONS 
+  ? JSON.parse(process.env.POUCHDB_OPTIONS)
+  : {
+      auto_compaction: true,
+      revs_limit: 10
+    };
+
+const db = new PouchDB(pouchDbPath, pouchDbOptions);
+
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
+  _id: string;
   name: string;
   entityType: string;
   observations: string[];
+  type: 'entity';
 }
 
 interface Relation {
+  _id: string;
   from: string;
   to: string;
   relationType: string;
+  type: 'relation';
 }
 
 interface KnowledgeGraph {
@@ -61,92 +77,91 @@ class KnowledgeGraphManager {
     if (!path.isAbsolute(memoryFilePath)) {
       throw new Error("Memory file path must be an absolute path");
     }
-
-    memoryFilePath = path.normalize(memoryFilePath);
-
-    try {
-      await fs.stat(memoryFilePath);
-    } catch (error) {
-      // If the error is because the file does not exist, create it
-      if ((error as any).code === "ENOENT") {
-        await fs.writeFile(memoryFilePath, "");
-      } else {
-        // Handle other potential errors
-        throw error;
-      }
-    }
     this.memoryFilePath = memoryFilePath;
   }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
-      const data = await fs.readFile(
-        this.memoryFilePath ?? MEMORY_FILE_PATH,
-        "utf-8"
-      );
-      const lines = data.split("\n").filter((line) => line.trim() !== "");
-      return lines.reduce(
-        (graph: KnowledgeGraph, line) => {
-          const item = JSON.parse(line);
-          if (item.type === "entity") graph.entities.push(item as Entity);
-          if (item.type === "relation") graph.relations.push(item as Relation);
-          return graph;
-        },
-        { entities: [], relations: [] }
-      );
+      const result = await db.allDocs({ include_docs: true });
+      const graph: KnowledgeGraph = { entities: [], relations: [] };
+      
+      result.rows.forEach(row => {
+        const doc = row.doc as unknown as Entity | Relation;
+        if (doc && doc.type === 'entity') {
+          graph.entities.push(doc as Entity);
+        } else if (doc && doc.type === 'relation') {
+          graph.relations.push(doc as Relation);
+        }
+      });
+      
+      return graph;
     } catch (error) {
-      if (
-        error instanceof Error &&
-        "code" in error &&
-        (error as any).code === "ENOENT"
-      ) {
-        return { entities: [], relations: [] };
-      }
-      throw error;
+      console.error('Error loading graph:', error);
+      return { entities: [], relations: [] };
     }
   }
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
-    const lines = [
-      ...graph.entities.map((e) => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map((r) => JSON.stringify({ type: "relation", ...r })),
-    ];
-    await fs.writeFile(
-      this.memoryFilePath ?? MEMORY_FILE_PATH,
-      lines.join("\n")
-    );
+    try {
+      // Save to PouchDB
+      const docs = [
+        ...graph.entities,
+        ...graph.relations
+      ];
+      await db.bulkDocs(docs);
+      
+      // Backup to file (without type property since it's already in the entities/relations)
+      const lines = [
+        ...graph.entities.map((e) => JSON.stringify({ ...e })),
+        ...graph.relations.map((r) => JSON.stringify({ ...r })),
+      ];
+      await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    } catch (error) {
+      console.error('Error saving graph:', error);
+      throw error;
+    }
   }
 
   async createEntities(
-    entities: Entity[],
+    entities: Omit<Entity, '_id'>[],
     filepath: string
   ): Promise<Entity[]> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
-    const newEntities = entities.filter(
-      (e) =>
-        !graph.entities.some((existingEntity) => existingEntity.name === e.name)
-    );
+    
+    const newEntities = entities
+      .filter(e => !graph.entities.some(existing => existing.name === e.name))
+      .map(e => ({
+        ...e,
+        _id: `entity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'entity' as const
+      }));
+    
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
     return newEntities;
   }
 
   async createRelations(
-    relations: Relation[],
+    relations: Omit<Relation, '_id'>[],
     filepath: string
   ): Promise<Relation[]> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
-    const newRelations = relations.filter(
-      (r) =>
-        !graph.relations.some(
-          (existingRelation) =>
-            existingRelation.from === r.from &&
-            existingRelation.to === r.to &&
-            existingRelation.relationType === r.relationType
-        )
-    );
+    
+    const newRelations = relations
+      .filter(r => !graph.relations.some(
+        existing => 
+          existing.from === r.from && 
+          existing.to === r.to && 
+          existing.relationType === r.relationType
+      ))
+      .map(r => ({
+        ...r,
+        _id: `relation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'relation' as const
+      }));
+    
     graph.relations.push(...newRelations);
     await this.saveGraph(graph);
     return newRelations;
@@ -158,6 +173,7 @@ class KnowledgeGraphManager {
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
+    
     const results = observations.map((o) => {
       const entity = graph.entities.find((e) => e.name === o.entityName);
       if (!entity) {
@@ -169,6 +185,7 @@ class KnowledgeGraphManager {
       entity.observations.push(...newObservations);
       return { entityName: o.entityName, addedObservations: newObservations };
     });
+    
     await this.saveGraph(graph);
     return results;
   }
@@ -176,12 +193,23 @@ class KnowledgeGraphManager {
   async deleteEntities(entityNames: string[], filepath: string): Promise<void> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(
-      (e) => !entityNames.includes(e.name)
+    
+    // Delete entities
+    const entitiesToDelete = graph.entities.filter(e => entityNames.includes(e.name));
+    await db.bulkDocs(entitiesToDelete.map(e => ({ ...e, _deleted: true })));
+    
+    // Delete associated relations
+    const relationsToDelete = graph.relations.filter(
+      r => entityNames.includes(r.from) || entityNames.includes(r.to)
     );
+    await db.bulkDocs(relationsToDelete.map(r => ({ ...r, _deleted: true })));
+    
+    // Update graph in memory
+    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
     graph.relations = graph.relations.filter(
-      (r) => !entityNames.includes(r.from) && !entityNames.includes(r.to)
+      r => !entityNames.includes(r.from) && !entityNames.includes(r.to)
     );
+    
     await this.saveGraph(graph);
   }
 
@@ -191,6 +219,7 @@ class KnowledgeGraphManager {
   ): Promise<void> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
+    
     deletions.forEach((d) => {
       const entity = graph.entities.find((e) => e.name === d.entityName);
       if (entity) {
@@ -199,6 +228,7 @@ class KnowledgeGraphManager {
         );
       }
     });
+    
     await this.saveGraph(graph);
   }
 
@@ -208,6 +238,19 @@ class KnowledgeGraphManager {
   ): Promise<void> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
+    
+    const relationsToDelete = graph.relations.filter(
+      (r) =>
+        relations.some(
+          (delRelation) =>
+            r.from === delRelation.from &&
+            r.to === delRelation.to &&
+            r.relationType === delRelation.relationType
+        )
+    );
+    
+    await db.bulkDocs(relationsToDelete.map(r => ({ ...r, _deleted: true })));
+    
     graph.relations = graph.relations.filter(
       (r) =>
         !relations.some(
@@ -217,6 +260,7 @@ class KnowledgeGraphManager {
             r.relationType === delRelation.relationType
         )
     );
+    
     await this.saveGraph(graph);
   }
 
@@ -225,12 +269,10 @@ class KnowledgeGraphManager {
     return this.loadGraph();
   }
 
-  // Very basic search function
   async searchNodes(query: string, filepath: string): Promise<KnowledgeGraph> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
 
-    // Filter entities
     const filteredEntities = graph.entities.filter(
       (e) =>
         e.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -240,45 +282,36 @@ class KnowledgeGraphManager {
         )
     );
 
-    // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map((e) => e.name));
 
-    // Filter relations to only include those between filtered entities
     const filteredRelations = graph.relations.filter(
       (r) => filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
     );
 
-    const filteredGraph: KnowledgeGraph = {
+    return {
       entities: filteredEntities,
       relations: filteredRelations,
     };
-
-    return filteredGraph;
   }
 
   async openNodes(names: string[], filepath: string): Promise<KnowledgeGraph> {
     await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
 
-    // Filter entities
     const filteredEntities = graph.entities.filter((e) =>
       names.includes(e.name)
     );
 
-    // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map((e) => e.name));
 
-    // Filter relations to only include those between filtered entities
     const filteredRelations = graph.relations.filter(
       (r) => filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
     );
 
-    const filteredGraph: KnowledgeGraph = {
+    return {
       entities: filteredEntities,
       relations: filteredRelations,
     };
-
-    return filteredGraph;
   }
 }
 
@@ -606,7 +639,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify(
               await knowledgeGraphManager.createEntities(
-                args.entities as Entity[],
+                args.entities as Omit<Entity, '_id'>[],
                 args.memoryFilePath as string
               ),
               null,
@@ -622,7 +655,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify(
               await knowledgeGraphManager.createRelations(
-                args.relations as Relation[],
+                args.relations as Omit<Relation, '_id'>[],
                 args.memoryFilePath as string
               ),
               null,

@@ -16,7 +16,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.6.1"
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@types/pouchdb": "^6.4.2",
+    "pouchdb": "^9.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.8",

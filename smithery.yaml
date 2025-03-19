@@ -10,6 +10,22 @@ startCommand:
         type: string
         description: Absolute path to the memory file (optional). If not provided,
           defaults to memory.json in the current directory.
+      pouchDbPath:
+        type: string
+        description: Path to the PouchDB database (optional). If not provided,
+          defaults to 'memory_db' in the current directory.
+      pouchDbOptions:
+        type: object
+        description: Additional PouchDB configuration options
+        properties:
+          auto_compaction:
+            type: boolean
+            description: Enable automatic compaction of the database
+            default: true
+          revs_limit:
+            type: number
+            description: Maximum number of revisions to keep per document
+            default: 10
     default: {}
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
@@ -20,6 +36,12 @@ startCommand:
       if(config.memoryFilePath) {
         env.MEMORY_FILE_PATH = config.memoryFilePath;
       }
+      if(config.pouchDbPath) {
+        env.POUCHDB_PATH = config.pouchDbPath;
+      }
+      if(config.pouchDbOptions) {
+        env.POUCHDB_OPTIONS = JSON.stringify(config.pouchDbOptions);
+      }
       return {
         command: 'node',
         args: ['dist/index.js'],
@@ -28,3 +50,7 @@ startCommand:
     }
   exampleConfig:
     memoryFilePath: /absolute/path/to/memory.json
+    pouchDbPath: /absolute/path/to/memory_db
+    pouchDbOptions:
+      auto_compaction: true
+      revs_limit: 10
