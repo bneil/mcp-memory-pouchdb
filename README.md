@@ -4,6 +4,8 @@
 
 This project adds new features to the Memory server offered by the MCP team. It allows for the creation and management of a knowledge graph that captures interactions via a language model (LLM). 🚀
 
+This repo was forked from [https://github.com/BRO3886/mcp-memory-custom](https://github.com/BRO3886/mcp-memory-custom) which was a great starting point, thanks again for fixing timestamps. This repo's goal was more to fix the issue with an ever increasing json file for context.
+
 ## New Features ✨
 
 ### 1. PouchDB Integration 💾
