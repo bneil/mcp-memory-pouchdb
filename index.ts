@@ -31,6 +31,13 @@ if (!POUCHDB_PATH) {
   process.exit(1);
 }
 
+console.error("--------------------------------");
+console.error("Starting Memory Server");
+console.error("--------------------------------");
+console.error("Memory File Path:", MEMORY_FILE_PATH);
+console.error("PouchDB Path:", POUCHDB_PATH);
+console.error("--------------------------------");
+
 // Initialize PouchDB with configuration from environment variables
 const pouchDbOptions = {
   adapter: 'memory',
@@ -92,19 +99,14 @@ class KnowledgeGraphManager {
   private memoryFilePath: string;
 
   constructor(memoryFilePath: string) {
+    if (!memoryFilePath) {
+      throw new Error("Memory file path is required");
+    }
     this.memoryFilePath = memoryFilePath;
   }
 
   async getCurrentTime() {
     return new Date().toISOString();
-  }
-
-  async setMemoryFilePath(memoryFilePath: string) {
-    // check if path is valid
-    if (!path.isAbsolute(memoryFilePath)) {
-      throw new Error("Memory file path must be an absolute path");
-    }
-    this.memoryFilePath = memoryFilePath;
   }
 
   // Add retry utility
@@ -177,10 +179,8 @@ class KnowledgeGraphManager {
   }
 
   async createEntities(
-    entities: Omit<Entity, '_id'>[],
-    filepath: string
+    entities: Omit<Entity, '_id'>[]
   ): Promise<Entity[]> {
-    await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
     
     const newEntities = entities
@@ -197,10 +197,8 @@ class KnowledgeGraphManager {
   }
 
   async createRelations(
-    relations: Omit<Relation, '_id'>[],
-    filepath: string
+    relations: Omit<Relation, '_id'>[]
   ): Promise<Relation[]> {
-    await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
     
     const newRelations = relations
@@ -222,10 +220,8 @@ class KnowledgeGraphManager {
   }
 
   async addObservations(
-    observations: { entityName: string; contents: string[] }[],
-    filepath: string
+    observations: { entityName: string; contents: string[] }[]
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
     
     const results = observations.map((o) => {
@@ -244,8 +240,7 @@ class KnowledgeGraphManager {
     return results;
   }
 
-  async deleteEntities(entityNames: string[], filepath: string): Promise<void> {
-    await this.setMemoryFilePath(filepath);
+  async deleteEntities(entityNames: string[]): Promise<void> {
     const graph = await this.loadGraph();
     
     // Delete entities
@@ -268,10 +263,8 @@ class KnowledgeGraphManager {
   }
 
   async deleteObservations(
-    deletions: { entityName: string; observations: string[] }[],
-    filepath: string
+    deletions: { entityName: string; observations: string[] }[]
   ): Promise<void> {
-    await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
     
     deletions.forEach((d) => {
@@ -287,10 +280,8 @@ class KnowledgeGraphManager {
   }
 
   async deleteRelations(
-    relations: Relation[],
-    filepath: string
+    relations: Relation[]
   ): Promise<void> {
-    await this.setMemoryFilePath(filepath);
     const graph = await this.loadGraph();
     
     const relationsToDelete = graph.relations.filter(
@@ -318,13 +309,11 @@ class KnowledgeGraphManager {
     await this.saveGraph(graph);
   }
 
-  async readGraph(filepath: string): Promise<KnowledgeGraph> {
-    await this.setMemoryFilePath(filepath);
+  async readGraph(): Promise<KnowledgeGraph> {
     return this.loadGraph();
   }
 
-  async searchNodes(query: string, filepath: string): Promise<KnowledgeGraph> {
-    await this.setMemoryFilePath(filepath);
+  async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
 
     const filteredEntities = graph.entities.filter(
@@ -348,8 +337,7 @@ class KnowledgeGraphManager {
     };
   }
 
-  async openNodes(names: string[], filepath: string): Promise<KnowledgeGraph> {
-    await this.setMemoryFilePath(filepath);
+  async openNodes(names: string[]): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
 
     const filteredEntities = graph.entities.filter((e) =>
@@ -397,20 +385,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {},
         },
       },
-      // {
-      //   name: "set_memory_file_path",
-      //   description: "Set the memory file path",
-      //   inputSchema: {
-      //     type: "object",
-      //     properties: {
-      //       memoryFilePath: {
-      //         type: "string",
-      //         description: "Absolute path to the memory file",
-      //       },
-      //     },
-      //     required: ["memoryFilePath"],
-      //   },
-      // },
       {
         name: "create_entities",
         description: "Create multiple new entities in the knowledge graph",
@@ -440,12 +414,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 required: ["name", "entityType", "observations"],
               },
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["entities", "memoryFilePath"],
+          required: ["entities"],
         },
       },
       {
@@ -478,12 +448,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 required: ["from", "to", "relationType"],
               },
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["relations", "memoryFilePath"],
+          required: ["relations"],
         },
       },
       {
@@ -512,12 +478,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 required: ["entityName", "contents"],
               },
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["observations", "memoryFilePath"],
+          required: ["observations"],
         },
       },
       {
@@ -532,12 +494,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               items: { type: "string" },
               description: "An array of entity names to delete",
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["entityNames", "memoryFilePath"],
+          required: ["entityNames"],
         },
       },
       {
@@ -566,12 +524,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 required: ["entityName", "observations"],
               },
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["deletions", "memoryFilePath"],
+          required: ["deletions"],
         },
       },
       {
@@ -604,12 +558,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               },
               description: "An array of relations to delete",
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["relations", "memoryFilePath"],
+          required: ["relations"],
         },
       },
       {
@@ -617,13 +567,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Read the entire knowledge graph",
         inputSchema: {
           type: "object",
-          properties: {
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
-          },
-          required: ["memoryFilePath"],
+          properties: {},
         },
       },
       {
@@ -637,12 +581,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 "The search query to match against entity names, types, and observation content",
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["query", "memoryFilePath"],
+          required: ["query"],
         },
       },
       {
@@ -657,12 +597,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               items: { type: "string" },
               description: "An array of entity names to retrieve",
             },
-            memoryFilePath: {
-              type: "string",
-              description: "The path to the memory file",
-            },
           },
-          required: ["names", "memoryFilePath"],
+          required: ["names"],
         },
       },
     ],
@@ -683,11 +619,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           { type: "text", text: await knowledgeGraphManager.getCurrentTime() },
         ],
       };
-    // case "set_memory_file_path":
-    //   knowledgeGraphManager.setMemoryFilePath(args.memoryFilePath as string);
-    //   return {
-    //     content: [{ type: "text", text: "Memory file path set successfully" }],
-    //   };
     case "create_entities":
       return {
         content: [
@@ -695,8 +626,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify(
               await knowledgeGraphManager.createEntities(
-                args.entities as Omit<Entity, '_id'>[],
-                args.memoryFilePath as string
+                args.entities as Omit<Entity, '_id'>[]
               ),
               null,
               2
@@ -711,8 +641,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify(
               await knowledgeGraphManager.createRelations(
-                args.relations as Omit<Relation, '_id'>[],
-                args.memoryFilePath as string
+                args.relations as Omit<Relation, '_id'>[]
               ),
               null,
               2
@@ -730,8 +659,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 args.observations as {
                   entityName: string;
                   contents: string[];
-                }[],
-                args.memoryFilePath as string
+                }[]
               ),
               null,
               2
@@ -741,24 +669,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     case "delete_entities":
       await knowledgeGraphManager.deleteEntities(
-        args.entityNames as string[],
-        args.memoryFilePath as string
+        args.entityNames as string[]
       );
       return {
         content: [{ type: "text", text: "Entities deleted successfully" }],
       };
     case "delete_observations":
       await knowledgeGraphManager.deleteObservations(
-        args.deletions as { entityName: string; observations: string[] }[],
-        args.memoryFilePath as string
+        args.deletions as { entityName: string; observations: string[] }[]
       );
       return {
         content: [{ type: "text", text: "Observations deleted successfully" }],
       };
     case "delete_relations":
       await knowledgeGraphManager.deleteRelations(
-        args.relations as Relation[],
-        args.memoryFilePath as string
+        args.relations as Relation[]
       );
       return {
         content: [{ type: "text", text: "Relations deleted successfully" }],
@@ -769,9 +694,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: JSON.stringify(
-              await knowledgeGraphManager.readGraph(
-                args.memoryFilePath as string
-              ),
+              await knowledgeGraphManager.readGraph(),
               null,
               2
             ),
@@ -785,8 +708,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify(
               await knowledgeGraphManager.searchNodes(
-                args.query as string,
-                args.memoryFilePath as string
+                args.query as string
               ),
               null,
               2
@@ -801,8 +723,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify(
               await knowledgeGraphManager.openNodes(
-                args.names as string[],
-                args.memoryFilePath as string
+                args.names as string[]
               ),
               null,
               2
