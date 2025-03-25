@@ -17,23 +17,21 @@ import { z } from "zod";
 PouchDB.plugin(PouchDBMemory);
 
 // Define memory file path using environment variable with fallback
-const defaultMemoryPath = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "memory.json"
-);
+const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH;
+const POUCHDB_PATH = process.env.POUCHDB_PATH;
 
-// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
-const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
-  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
-    ? process.env.MEMORY_FILE_PATH
-    : path.join(
-        path.dirname(fileURLToPath(import.meta.url)),
-        process.env.MEMORY_FILE_PATH
-      )
-  : defaultMemoryPath;
+// Fail early if required environment variables are not set
+if (!MEMORY_FILE_PATH) {
+  console.error("Error: MEMORY_FILE_PATH environment variable is required");
+  process.exit(1);
+}
+
+if (!POUCHDB_PATH) {
+  console.error("Error: POUCHDB_PATH environment variable is required");
+  process.exit(1);
+}
 
 // Initialize PouchDB with configuration from environment variables
-const pouchDbPath = process.env.POUCHDB_PATH || 'memory_db';
 const pouchDbOptions = {
   adapter: 'memory',
   auto_compaction: true,
@@ -41,8 +39,8 @@ const pouchDbOptions = {
   ...(process.env.POUCHDB_OPTIONS ? JSON.parse(process.env.POUCHDB_OPTIONS) : {})
 };
 
-console.error("Attempting to make a pouchDB instance with path", pouchDbPath, "and options", pouchDbOptions);
-const db = new PouchDB(pouchDbPath, pouchDbOptions);
+console.error("Initializing PouchDB with path:", POUCHDB_PATH, "and options:", pouchDbOptions);
+const db = new PouchDB(POUCHDB_PATH, pouchDbOptions);
 
 // Setup cleanup on process exit
 async function cleanup() {
