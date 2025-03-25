@@ -94,7 +94,11 @@ Add this to your `claude_desktop_config.json` / `.cursor/mcp.json` file:
   "mcpServers": {
     "memory": {
       "command": "node",
-      "args": ["/path/to/mcp-memory-pouchdb/dist/index.js"]
+      "args": ["/path/to/mcp-memory-pouchdb/dist/index.js"],
+      "env" : {
+        "MEMORY_FILE_PATH":"/home/.../local_dbs/memory.json",
+        "POUCHDB_PATH":"/home/.../local_dbs/pouchdb"
+      }
     }
   }
 }
