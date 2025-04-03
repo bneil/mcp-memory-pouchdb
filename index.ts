@@ -40,23 +40,87 @@ console.error("--------------------------------");
 
 // Initialize PouchDB with configuration from environment variables
 const pouchDbOptions = {
-  adapter: 'memory',
   auto_compaction: true,
   revs_limit: 10,
+  deterministic_revs: true,
+  // Remove prefix as it's causing path duplication
+  leveldown: {
+    writeBufferSize: 32 * 1024 * 1024, // 32MB
+    maxOpenFiles: 1000,
+    blockSize: 64 * 1024, // 64KB
+    lockfileTimeout: 10000, // 10 seconds
+  },
   ...(process.env.POUCHDB_OPTIONS ? JSON.parse(process.env.POUCHDB_OPTIONS) : {})
 };
 
-console.error("Initializing PouchDB with path:", POUCHDB_PATH, "and options:", pouchDbOptions);
-const db = new PouchDB(POUCHDB_PATH, pouchDbOptions);
+let db: PouchDB.Database;
 
-// Setup cleanup on process exit
+// Add initialization function with retry logic
+async function initializeDatabase(retries = 5, delay = 1000): Promise<void> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      if (db) {
+        try {
+          await db.close();
+        } catch (e) {
+          console.error("Error closing existing database connection:", e);
+        }
+      }
+      
+      // Ensure the directory exists
+      try {
+        if (!POUCHDB_PATH) {
+          throw new Error("POUCHDB_PATH is undefined");
+        }
+        await fs.mkdir(POUCHDB_PATH, { recursive: true });
+      } catch (e) {
+        console.error("Error creating database directory:", e);
+        throw e;
+      }
+      
+      console.error("Initializing PouchDB with path:", POUCHDB_PATH, "and options:", pouchDbOptions);
+      db = new PouchDB(POUCHDB_PATH, pouchDbOptions);
+      
+      // Test the connection
+      await db.info();
+      console.error("Database initialized successfully");
+      return;
+    } catch (error) {
+      console.error(`Database initialization attempt ${i + 1} failed:`, error);
+      if (i < retries - 1) {
+        console.error(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
+// Improve cleanup function
 async function cleanup() {
   try {
     console.error("Cleaning up PouchDB...");
-    await db.close();
-    console.error("PouchDB cleanup complete");
+    if (db) {
+      try {
+        // Force sync before closing
+        await db.compact();
+      } catch (e) {
+        console.error("Error during compaction:", e);
+      }
+      
+      try {
+        await db.close();
+        console.error("PouchDB cleanup complete");
+      } catch (e) {
+        console.error("Error closing database:", e);
+        throw e;
+      }
+    }
   } catch (error) {
     console.error("Error during cleanup:", error);
+    throw error;
   }
 }
 
@@ -117,7 +181,7 @@ class KnowledgeGraphManager {
   async retryOperation<T>(operation: () => Promise<T>, maxRetries = 5, initialDelay = 1000): Promise<T> {
     let lastError;
     let delay = initialDelay;
-    
+
     for (let i = 0; i < maxRetries; i++) {
       try {
         return await operation();
@@ -140,7 +204,7 @@ class KnowledgeGraphManager {
     try {
       const result = await this.retryOperation(() => db.allDocs({ include_docs: true }));
       const graph: KnowledgeGraph = { entities: [], relations: [] };
-      
+
       result.rows.forEach(row => {
         const doc = row.doc as unknown as Entity | Relation;
         if (doc && doc.type === 'entity') {
@@ -149,7 +213,7 @@ class KnowledgeGraphManager {
           graph.relations.push(doc as Relation);
         }
       });
-      
+
       return graph;
     } catch (error) {
       console.error('Error loading graph:', error);
@@ -165,7 +229,7 @@ class KnowledgeGraphManager {
         ...graph.relations
       ];
       await this.retryOperation(() => db.bulkDocs(docs));
-      
+
       // Backup to file
       const lines = [
         ...graph.entities.map((e) => JSON.stringify({ ...e })),
@@ -182,7 +246,7 @@ class KnowledgeGraphManager {
     entities: Omit<Entity, '_id'>[]
   ): Promise<Entity[]> {
     const graph = await this.loadGraph();
-    
+
     const newEntities = entities
       .filter(e => !graph.entities.some(existing => existing.name === e.name))
       .map(e => ({
@@ -190,7 +254,7 @@ class KnowledgeGraphManager {
         _id: `entity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'entity' as const
       }));
-    
+
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
     return newEntities;
@@ -200,12 +264,12 @@ class KnowledgeGraphManager {
     relations: Omit<Relation, '_id'>[]
   ): Promise<Relation[]> {
     const graph = await this.loadGraph();
-    
+
     const newRelations = relations
       .filter(r => !graph.relations.some(
-        existing => 
-          existing.from === r.from && 
-          existing.to === r.to && 
+        existing =>
+          existing.from === r.from &&
+          existing.to === r.to &&
           existing.relationType === r.relationType
       ))
       .map(r => ({
@@ -213,7 +277,7 @@ class KnowledgeGraphManager {
         _id: `relation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'relation' as const
       }));
-    
+
     graph.relations.push(...newRelations);
     await this.saveGraph(graph);
     return newRelations;
@@ -223,7 +287,7 @@ class KnowledgeGraphManager {
     observations: { entityName: string; contents: string[] }[]
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
-    
+
     const results = observations.map((o) => {
       const entity = graph.entities.find((e) => e.name === o.entityName);
       if (!entity) {
@@ -235,30 +299,30 @@ class KnowledgeGraphManager {
       entity.observations.push(...newObservations);
       return { entityName: o.entityName, addedObservations: newObservations };
     });
-    
+
     await this.saveGraph(graph);
     return results;
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
     const graph = await this.loadGraph();
-    
+
     // Delete entities
     const entitiesToDelete = graph.entities.filter(e => entityNames.includes(e.name));
     await db.bulkDocs(entitiesToDelete.map(e => ({ ...e, _deleted: true })));
-    
+
     // Delete associated relations
     const relationsToDelete = graph.relations.filter(
       r => entityNames.includes(r.from) || entityNames.includes(r.to)
     );
     await db.bulkDocs(relationsToDelete.map(r => ({ ...r, _deleted: true })));
-    
+
     // Update graph in memory
     graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
     graph.relations = graph.relations.filter(
       r => !entityNames.includes(r.from) && !entityNames.includes(r.to)
     );
-    
+
     await this.saveGraph(graph);
   }
 
@@ -266,7 +330,7 @@ class KnowledgeGraphManager {
     deletions: { entityName: string; observations: string[] }[]
   ): Promise<void> {
     const graph = await this.loadGraph();
-    
+
     deletions.forEach((d) => {
       const entity = graph.entities.find((e) => e.name === d.entityName);
       if (entity) {
@@ -275,7 +339,7 @@ class KnowledgeGraphManager {
         );
       }
     });
-    
+
     await this.saveGraph(graph);
   }
 
@@ -283,7 +347,7 @@ class KnowledgeGraphManager {
     relations: Relation[]
   ): Promise<void> {
     const graph = await this.loadGraph();
-    
+
     const relationsToDelete = graph.relations.filter(
       (r) =>
         relations.some(
@@ -293,9 +357,9 @@ class KnowledgeGraphManager {
             r.relationType === delRelation.relationType
         )
     );
-    
+
     await db.bulkDocs(relationsToDelete.map(r => ({ ...r, _deleted: true })));
-    
+
     graph.relations = graph.relations.filter(
       (r) =>
         !relations.some(
@@ -305,7 +369,7 @@ class KnowledgeGraphManager {
             r.relationType === delRelation.relationType
         )
     );
-    
+
     await this.saveGraph(graph);
   }
 
@@ -802,10 +866,17 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
   return { prompts };
 });
 
+// Initialize database before starting the server
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Knowledge Graph MCP Server running on stdio");
+  try {
+    await initializeDatabase();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Knowledge Graph MCP Server running on stdio");
+  } catch (error) {
+    console.error("Fatal error during initialization:", error);
+    process.exit(1);
+  }
 }
 
 main().catch((error) => {
