@@ -43,17 +43,35 @@ const pouchDbOptions = {
   auto_compaction: true,
   revs_limit: 10,
   deterministic_revs: true,
-  // Remove prefix as it's causing path duplication
   leveldown: {
     writeBufferSize: 32 * 1024 * 1024, // 32MB
     maxOpenFiles: 1000,
     blockSize: 64 * 1024, // 64KB
-    lockfileTimeout: 10000, // 10 seconds
+    lockfileTimeout: 30000, // 30 seconds
   },
   ...(process.env.POUCHDB_OPTIONS ? JSON.parse(process.env.POUCHDB_OPTIONS) : {})
 };
 
 let db: PouchDB.Database;
+
+// Helper function to check and remove stale lock file
+async function checkAndRemoveLockFile() {
+  if (!POUCHDB_PATH) {
+    throw new Error("POUCHDB_PATH is undefined");
+  }
+  
+  const lockPath = path.join(POUCHDB_PATH, 'LOCK');
+  try {
+    const stats = await fs.stat(lockPath);
+    // If lock file is older than 30 seconds, it's probably stale
+    if (Date.now() - stats.mtimeMs > 30000) {
+      console.error("Removing stale lock file");
+      await fs.unlink(lockPath);
+    }
+  } catch (e) {
+    // Lock file doesn't exist or can't be accessed, which is fine
+  }
+}
 
 // Add initialization function with retry logic
 async function initializeDatabase(retries = 5, delay = 1000): Promise<void> {
@@ -61,6 +79,8 @@ async function initializeDatabase(retries = 5, delay = 1000): Promise<void> {
     try {
       if (db) {
         try {
+          // Add delay before closing to allow any pending operations to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
           await db.close();
         } catch (e) {
           console.error("Error closing existing database connection:", e);
@@ -77,6 +97,9 @@ async function initializeDatabase(retries = 5, delay = 1000): Promise<void> {
         console.error("Error creating database directory:", e);
         throw e;
       }
+
+      // Check for and remove stale lock file
+      await checkAndRemoveLockFile();
       
       console.error("Initializing PouchDB with path:", POUCHDB_PATH, "and options:", pouchDbOptions);
       db = new PouchDB(POUCHDB_PATH, pouchDbOptions);
@@ -88,9 +111,10 @@ async function initializeDatabase(retries = 5, delay = 1000): Promise<void> {
     } catch (error) {
       console.error(`Database initialization attempt ${i + 1} failed:`, error);
       if (i < retries - 1) {
-        console.error(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; // Exponential backoff
+        const nextDelay = delay * 2; // Exponential backoff
+        console.error(`Retrying in ${nextDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, nextDelay));
+        delay = nextDelay;
       } else {
         throw error;
       }
