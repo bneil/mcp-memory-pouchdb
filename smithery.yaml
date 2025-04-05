@@ -14,6 +14,10 @@ startCommand:
         type: string
         description: Path to the PouchDB database (optional). If not provided,
           defaults to 'memory_db' in the current directory.
+      disableMemoryFile:
+        type: boolean
+        description: Set to true to disable saving to memory.json file (only use PouchDB for storage)
+        default: false
       pouchDbOptions:
         type: object
         description: Additional PouchDB configuration options
@@ -42,6 +46,9 @@ startCommand:
       if(config.pouchDbOptions) {
         env.POUCHDB_OPTIONS = JSON.stringify(config.pouchDbOptions);
       }
+      if(config.disableMemoryFile) {
+        env.DISABLE_MEMORY_FILE = 'true';
+      }
       return {
         command: 'node',
         args: ['dist/index.js'],
@@ -51,6 +58,7 @@ startCommand:
   exampleConfig:
     memoryFilePath: /absolute/path/to/memory.json
     pouchDbPath: /absolute/path/to/memory_db
+    disableMemoryFile: false
     pouchDbOptions:
       auto_compaction: true
       revs_limit: 10
