@@ -71,7 +71,8 @@ Example configuration in your `claude_desktop_config.json` / `.cursor/mcp.json`:
       "args": ["/path/to/mcp-memory-pouchdb/dist/index.js"],
       "env": {
         "MEMORY_FILE_PATH": "/path/to/custom/memory.json",
-        "POUCHDB_PATH": "/path/to/custom/pouchdb_directory"
+        "POUCHDB_PATH": "/path/to/custom/pouchdb_directory",
+        "DISABLE_MEMORY_FILE": "true"
       }
     }
   }
@@ -82,6 +83,7 @@ The server will fail to start if either environment variable is not set. 🚫
 
 Optional environment variables:
 - `POUCHDB_OPTIONS`: JSON string of additional PouchDB configuration options
+- `DISABLE_MEMORY_FILE`: Set to "true" to disable saving to memory.json file (only use PouchDB for storage)
 
 ### Running the Server 🚀
 

@@ -19,10 +19,11 @@ PouchDB.plugin(PouchDBMemory);
 // Define memory file path using environment variable with fallback
 const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH;
 const POUCHDB_PATH = process.env.POUCHDB_PATH;
+const DISABLE_MEMORY_FILE = process.env.DISABLE_MEMORY_FILE === 'true';
 
 // Fail early if required environment variables are not set
-if (!MEMORY_FILE_PATH) {
-  console.error("Error: MEMORY_FILE_PATH environment variable is required");
+if (!MEMORY_FILE_PATH && !DISABLE_MEMORY_FILE) {
+  console.error("Error: MEMORY_FILE_PATH environment variable is required when DISABLE_MEMORY_FILE is not set to true");
   process.exit(1);
 }
 
@@ -36,6 +37,7 @@ console.error("Starting Memory Server");
 console.error("--------------------------------");
 console.error("Memory File Path:", MEMORY_FILE_PATH);
 console.error("PouchDB Path:", POUCHDB_PATH);
+console.error("Disable Memory File:", DISABLE_MEMORY_FILE);
 console.error("--------------------------------");
 
 // Initialize PouchDB with configuration from environment variables
@@ -185,12 +187,14 @@ interface KnowledgeGraph {
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 class KnowledgeGraphManager {
   private memoryFilePath: string;
+  private disableMemoryFile: boolean;
 
-  constructor(memoryFilePath: string) {
-    if (!memoryFilePath) {
-      throw new Error("Memory file path is required");
+  constructor(memoryFilePath: string, disableMemoryFile: boolean) {
+    if (!memoryFilePath && !disableMemoryFile) {
+      throw new Error("Memory file path is required when DISABLE_MEMORY_FILE is not set to true");
     }
     this.memoryFilePath = memoryFilePath;
+    this.disableMemoryFile = disableMemoryFile;
   }
 
   async getCurrentTime() {
@@ -254,12 +258,14 @@ class KnowledgeGraphManager {
       ];
       await this.retryOperation(() => db.bulkDocs(docs));
 
-      // Backup to file
-      const lines = [
-        ...graph.entities.map((e) => JSON.stringify({ ...e })),
-        ...graph.relations.map((r) => JSON.stringify({ ...r })),
-      ];
-      await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+      // Only save to file if memory file is not disabled
+      if (!this.disableMemoryFile) {
+        const lines = [
+          ...graph.entities.map((e) => JSON.stringify({ ...e })),
+          ...graph.relations.map((r) => JSON.stringify({ ...r })),
+        ];
+        await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+      }
     } catch (error) {
       console.error('Error saving graph:', error);
       throw error;
@@ -445,7 +451,7 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
+const knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH || '', DISABLE_MEMORY_FILE);
 
 // The server instance and tools exposed to Claude
 const server = new Server(
